@@ -14,6 +14,7 @@ Bare names refer to <name>.fits in the current directory.
     fits> percentile(b, 99.5)    99.5th percentile of b
     fits> sub = crop(b, 100, 200, 600, 900)   x1,y1,x2,y2 (end-exclusive)
     fits> bg(b)                  sigma-clipped sky-background value
+    fits> bgnoise(b)             sigma-clipped sky-noise (stddev)
     fits> flat = b - bg(b)       subtract scalar background
     fits> back = bg2d(b, box=64) 2D background (gradient/vignetting) map
     fits> flat = b - bg2d(b, box=64)
@@ -215,6 +216,14 @@ def _bg(img, k=3.0, maxiters=5):
     return float(median)
 
 
+def _bgnoise(img, k=3.0, maxiters=5):
+    a = np.asarray(img)
+    if a.ndim < 2:
+        return float(np.std(a)) if a.size > 1 else 0.0
+    _, _, std = sigma_clipped_stats(a, sigma=float(k), maxiters=int(maxiters))
+    return float(std)
+
+
 def _bg2d(img, box=64, filter_size=3, mask=None):
     from photutils.background import Background2D, MedianBackground
     a = np.asarray(img, dtype=np.float64)
@@ -244,6 +253,7 @@ FUNCS = {
     "crop": _crop,
     "bg": _bg,
     "bg2d": _bg2d,
+    "bgnoise": _bgnoise,
 }
 
 BINOPS = {

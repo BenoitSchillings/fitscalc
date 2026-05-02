@@ -131,6 +131,7 @@ real stacking, where a single cosmic-ray hit ruins the per-pixel mean.
 
 ```
 bg(img, k=3, maxiters=5)              # sigma-clipped sky-background scalar
+bgnoise(img, k=3, maxiters=5)         # sigma-clipped sky-noise (stddev) scalar
 bg2d(img, box=64, filter_size=3)      # 2D background map (image-shaped)
 percentile(img, p)                    # e.g. percentile(b, 99.5)
 crop(img, x1, y1, x2, y2)             # end-exclusive: matches img[y1:y2, x1:x2]
@@ -152,6 +153,18 @@ fits> flat = b - bg2d(b, box=64)
 
 A larger `box` gives a smoother (more conservative) background; smaller
 `box` follows finer structure but risks absorbing extended sources.
+
+`bgnoise` returns the sigma-clipped standard deviation of sky pixels —
+i.e. the per-pixel noise after stars have been excluded. The plain
+`std(img)` of a starfield is dominated by the bright stars and tells
+you almost nothing about the sky; `bgnoise` is the version you actually
+want for thresholds, SNR, and stack-quality comparisons:
+
+```
+fits> thr = 5 * bgnoise(b)                   # 5-sigma detection threshold
+fits> det = where(b - bg(b) > thr, b, 0)
+fits> bgnoise(stack) / bgnoise(light01)      # noise reduction factor
+```
 
 ### Counting files
 
