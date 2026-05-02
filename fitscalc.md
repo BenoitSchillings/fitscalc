@@ -16,6 +16,19 @@ python3 fitscalc.py < script.txt       # batch mode (one statement per line)
 Inside the REPL: line editing and history are enabled. Lines starting
 with `#` are comments. Type `quit` (or `exit`, `q`, or Ctrl-D) to leave.
 
+### Optional: `calc` shortcut
+
+`./install.sh` adds a `calc` shell function to `~/.bashrc` so you can
+type `calc` anywhere instead of `python3 /path/to/fitscalc.py`:
+
+```
+./install.sh              # install or refresh (idempotent)
+./install.sh --uninstall  # remove
+```
+
+Open a new shell or `source ~/.bashrc`, then `calc`, `calc 'a = b + c'`,
+or `calc < pipeline.txt` work from any directory.
+
 ## Mental model
 
 - A bare identifier `x` means the file `x.fits` in the current
