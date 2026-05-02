@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+
+# FITS files (test artifacts, user data)
+*.fits
+*.fit
+*.fz
+
+# Editor scratch
+.DS_Store
+*.swp
