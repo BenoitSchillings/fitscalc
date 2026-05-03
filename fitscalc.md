@@ -57,17 +57,27 @@ Numeric literals work normally: `b * 0.5`, `b - 1000`, `a ** 0.5`.
 
 ### File references
 
-There are three forms:
-
 ```
 bare name              b               -> b.fits
 bare glob              lights*         -> all lights*.fits, as a list
+bare .ser path         planet.ser      -> all frames in a SER file, as a list
 quoted path/glob       "darks/*.fits"  -> all matching files, as a list
+quoted .ser            "data/jup.ser"  -> all frames, as a list
 ```
 
 A *list* of images is what you pass to a stack reduction
 (`mean`, `median`, `mean_sigma`, …). Assigning a list to a name is an
 error — wrap it in a reduction first.
+
+A `.ser` file (planetary/lunar video container) behaves like a
+glob: a single file expands to all of its frames, so anywhere a glob
+works — `mean(images*)`, `mean_sigma(images*, k=3)` — a `.ser` path
+works too. You can mix sources in one call:
+
+```
+fits> stack = mean_sigma(planet.ser, k=3)
+fits> bigger = mean(planet.ser, extra_lights*)
+```
 
 ### Glob disambiguation
 
@@ -181,13 +191,15 @@ fits> debanded = clean(b)
 fits> debanded = clean(b, kernel=128)
 ```
 
-### Counting files
+### Counting files / frames
 
 ```
-count(lights*)
+count(lights*)        # number of files matching the glob
+count(planet.ser)     # number of frames in a SER file
 ```
 
-Returns the number of files matching the glob (without loading them).
+Neither form loads pixel data — `count` just stats the directory or
+reads the SER header.
 
 ### Viewing images
 

@@ -9,6 +9,8 @@ Bare names refer to <name>.fits in the current directory.
     fits> a = mean(images*)      per-pixel mean over images*.fits
     fits> a = median(img1, img2, img3)
     fits> a = sum("dark/*.fits")
+    fits> a = mean(planet.ser)   per-pixel mean over all frames in a SER file
+    fits> count(planet.ser)      number of frames in a SER file
     fits> a = mean_sigma(lights*, k=3)   sigma-clipped stack
     fits> count(lights*)         number of files matching lights*.fits
     fits> percentile(b, 99.5)    99.5th percentile of b
@@ -29,7 +31,9 @@ Bare names refer to <name>.fits in the current directory.
     fits> quit
 """
 import ast
+import contextlib
 import glob as globmod
+import io
 import json
 import os
 import re
@@ -52,11 +56,15 @@ GLOB_CHARS = r"\w./\-*?\[\]"
 GLOB_RE = re.compile(
     rf"(?<=[(,=])\s*([{GLOB_CHARS}]*[*?\[][{GLOB_CHARS}]*)\s*(?=[,)]|$)"
 )
+# Bare .ser paths: filename ending in .ser (no glob meta) in argument-list position.
+SER_RE = re.compile(r"(?<=[(,=])\s*([A-Za-z0-9_./\-]+\.ser)\s*(?=[,)]|$)")
 
 
 def preprocess(line: str) -> str:
-    """Rewrite bare glob tokens into string literals so ast.parse accepts them."""
-    return GLOB_RE.sub(lambda m: repr(m.group(1)), line)
+    """Rewrite bare glob and .ser tokens into string literals so ast.parse accepts them."""
+    line = SER_RE.sub(lambda m: repr(m.group(1)), line)
+    line = GLOB_RE.sub(lambda m: repr(m.group(1)), line)
+    return line
 
 
 def path_of(name: str) -> str:
@@ -153,14 +161,61 @@ def _launch_viewer(files: list[str]) -> None:
     print(f"opened viewer ({len(abs_files)} file{plural})")
 
 
+def _open_ser(path: str):
+    """Open a SER file, suppressing the library's debug print on construction."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"{path} not found")
+    from ser import Ser
+    with contextlib.redirect_stdout(io.StringIO()):
+        return Ser(path)
+
+
+def _load_ser_frames(path: str) -> list[np.ndarray]:
+    s = _open_ser(path)
+    try:
+        frames = []
+        for i in range(int(s.count)):
+            img = s.load_img(i)
+            if img is None:
+                continue
+            frames.append(np.asarray(img, dtype=np.float64))
+        if not frames:
+            raise ValueError(f"{path}: no frames could be loaded")
+        return frames
+    finally:
+        s.close()
+
+
+def _ser_frame_count(path: str) -> int:
+    s = _open_ser(path)
+    try:
+        return int(s.count)
+    finally:
+        s.close()
+
+
+def _load_one(path: str):
+    """Load a single path - .ser expands to list of frames; otherwise FITS."""
+    if path.endswith(".ser"):
+        return _load_ser_frames(path)
+    return load_path(path)
+
+
 def expand_string(s: str):
-    """Resolve a string operand: glob -> list of arrays, plain path -> array."""
+    """Resolve a string operand: glob -> list of arrays, plain path -> array (or list, for .ser)."""
     if any(c in s for c in "*?["):
         paths = _glob_paths(s)
         if not paths:
             raise FileNotFoundError(f"no files match {s}")
-        return [load_path(p) for p in paths]
-    return load_path(s)
+        out = []
+        for p in paths:
+            loaded = _load_one(p)
+            if isinstance(loaded, list):
+                out.extend(loaded)
+            else:
+                out.append(loaded)
+        return out
+    return _load_one(s)
 
 
 def save(name: str, data: np.ndarray) -> None:
@@ -169,10 +224,12 @@ def save(name: str, data: np.ndarray) -> None:
 
 
 def _collect_stack(args):
-    if len(args) == 1 and isinstance(args[0], (list, tuple)):
-        items = args[0]
-    else:
-        items = args
+    items = []
+    for a in args:
+        if isinstance(a, (list, tuple)):
+            items.extend(a)
+        else:
+            items.append(a)
     if len(items) < 2:
         raise ValueError("stack reduction needs at least 2 frames")
     return np.stack([np.asarray(x) for x in items], axis=0)
@@ -335,8 +392,11 @@ def evaluate(node):
             if (len(node.args) != 1 or node.keywords
                     or not isinstance(node.args[0], ast.Constant)
                     or not isinstance(node.args[0].value, str)):
-                raise ValueError("count() takes a single glob: count(images*)")
-            return len(_glob_paths(node.args[0].value))
+                raise ValueError("count() takes a glob or .ser path: count(images*) or count(planet.ser)")
+            s = node.args[0].value
+            if s.endswith(".ser") and not any(c in s for c in "*?["):
+                return _ser_frame_count(s)
+            return len(_glob_paths(s))
         if fname == "view":
             if not node.args or node.keywords:
                 raise ValueError("view() takes one or more file references: view(b), view(lights*)")
