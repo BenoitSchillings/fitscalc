@@ -54,12 +54,12 @@ EXT = ".fits"
 
 # A glob token: contains *, ?, or [, sits inside a (...) or after a comma.
 # Lookbehind/ahead make sure we don't grab a stray "*" from b * c.
-GLOB_CHARS = r"\w./\-*?\[\]"
+GLOB_CHARS = r"\w./\-*?\[\]~"
 GLOB_RE = re.compile(
     rf"(?<=[(,=])\s*([{GLOB_CHARS}]*[*?\[][{GLOB_CHARS}]*)\s*(?=[,)]|$)"
 )
 # Bare .ser paths: filename ending in .ser (no glob meta) in argument-list position.
-SER_RE = re.compile(r"(?<=[(,=])\s*([A-Za-z0-9_./\-]+\.ser)\s*(?=[,)]|$)")
+SER_RE = re.compile(r"(?<=[(,=])\s*([A-Za-z0-9_./\-~]+\.ser)\s*(?=[,)]|$)")
 
 
 def preprocess(line: str) -> str:
@@ -74,6 +74,7 @@ def path_of(name: str) -> str:
 
 
 def load_path(path: str) -> np.ndarray:
+    path = os.path.expanduser(path)
     if not os.path.exists(path) and not path.endswith(EXT) and os.path.exists(path + EXT):
         path = path + EXT
     if not os.path.exists(path):
@@ -90,6 +91,7 @@ def load(name: str) -> np.ndarray:
 
 
 def _glob_paths(pattern: str) -> list[str]:
+    pattern = os.path.expanduser(pattern)
     full = pattern if pattern.endswith(EXT) or "." in os.path.basename(pattern) else pattern + EXT
     return sorted(globmod.glob(full))
 
@@ -99,17 +101,17 @@ def _resolve_paths(node) -> list[str]:
     if isinstance(node, ast.Name):
         return [path_of(node.id)]
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        s = node.value
+        s = os.path.expanduser(node.value)
         if any(c in s for c in "*?["):
             paths = _glob_paths(s)
             if not paths:
-                raise FileNotFoundError(f"no files match {s}")
+                raise FileNotFoundError(f"no files match {node.value}")
             return paths
         if os.path.exists(s):
             return [s]
         if not s.endswith(EXT) and os.path.exists(s + EXT):
             return [s + EXT]
-        raise FileNotFoundError(f"{s} not found")
+        raise FileNotFoundError(f"{node.value} not found")
     raise ValueError(f"view() arg must be a name or quoted path/glob, got {ast.unparse(node)}")
 
 
@@ -165,6 +167,7 @@ def _launch_viewer(files: list[str]) -> None:
 
 def _open_ser(path: str):
     """Open a SER file, suppressing the library's debug print on construction."""
+    path = os.path.expanduser(path)
     if not os.path.exists(path):
         raise FileNotFoundError(f"{path} not found")
     from ser import Ser

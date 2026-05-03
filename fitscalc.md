@@ -79,6 +79,16 @@ fits> stack = mean_sigma(planet.ser, k=3)
 fits> bigger = mean(planet.ser, extra_lights*)
 ```
 
+Paths can be relative, absolute, or `~`-prefixed; the tilde is expanded
+everywhere a path is accepted (quoted or bare):
+
+```
+fits> a = "~/Downloads/light01.fits"
+fits> m = mean(~/data/lights*.fits)
+fits> n = count(~/sessions/jup.ser)
+fits> view(~/Downloads/img.fits)
+```
+
 ### Glob disambiguation
 
 Globs are recognized only in argument-list position (after `(`, `,`, or
