@@ -18,6 +18,8 @@ Bare names refer to <name>.fits in the current directory.
     fits> flat = b - bg(b)       subtract scalar background
     fits> back = bg2d(b, box=64) 2D background (gradient/vignetting) map
     fits> flat = b - bg2d(b, box=64)
+    fits> debanded = clean(b)    remove column-fixed vertical banding
+    fits> debanded = clean(b, kernel=128)
     fits> view(b)                open b.fits in the image viewer
     fits> view(lights*)          browse a sequence (Prev/Next, A=auto-scale)
     fits> b                      print stats for b.fits
@@ -224,6 +226,30 @@ def _bgnoise(img, k=3.0, maxiters=5):
     return float(std)
 
 
+def _clean(img, kernel=64):
+    """Remove vertical column banding by dividing out the median per-column gain.
+
+    For each row, divide by a horizontal Gaussian smooth (sigma = kernel/4)
+    to get the high-frequency residual. Real structure varies row-to-row and
+    cancels in the median across rows; column-fixed banding survives.
+    """
+    from scipy.ndimage import gaussian_filter1d
+    a = np.asarray(img, dtype=np.float64)
+    if a.ndim != 2:
+        raise ValueError("clean() expects a 2D image")
+    ksize = int(kernel)
+    if ksize % 2 == 0:
+        ksize += 1
+    sigma = ksize / 4.0
+    smoothed = gaussian_filter1d(a, sigma=sigma, axis=1, mode="reflect")
+    smoothed = np.maximum(smoothed, 1e-10)
+    ratio = a / smoothed
+    banding = np.median(ratio, axis=0)
+    banding = np.clip(banding, 0.5, 2.0)
+    correction = 1.0 / banding
+    return a * correction[np.newaxis, :]
+
+
 def _bg2d(img, box=64, filter_size=3, mask=None):
     from photutils.background import Background2D, MedianBackground
     a = np.asarray(img, dtype=np.float64)
@@ -254,6 +280,7 @@ FUNCS = {
     "bg": _bg,
     "bg2d": _bg2d,
     "bgnoise": _bgnoise,
+    "clean": _clean,
 }
 
 BINOPS = {

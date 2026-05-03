@@ -131,9 +131,11 @@ real stacking, where a single cosmic-ray hit ruins the per-pixel mean.
 
 ```
 bg(img, k=3, maxiters=5)              # sigma-clipped sky-background scalar
+bgnoise(img, k=3, maxiters=5)         # sigma-clipped sky-noise (stddev) scalar
 bg2d(img, box=64, filter_size=3)      # 2D background map (image-shaped)
 percentile(img, p)                    # e.g. percentile(b, 99.5)
 crop(img, x1, y1, x2, y2)             # end-exclusive: matches img[y1:y2, x1:x2]
+clean(img, kernel=64)                 # remove vertical column banding
 ```
 
 `crop`'s coordinates are 0-based and end-exclusive — i.e. `crop(b, 0, 0, 100, 100)`
@@ -152,6 +154,32 @@ fits> flat = b - bg2d(b, box=64)
 
 A larger `box` gives a smoother (more conservative) background; smaller
 `box` follows finer structure but risks absorbing extended sources.
+
+`bgnoise` returns the sigma-clipped standard deviation of sky pixels —
+i.e. the per-pixel noise after stars have been excluded. The plain
+`std(img)` of a starfield is dominated by the bright stars and tells
+you almost nothing about the sky; `bgnoise` is the version you actually
+want for thresholds, SNR, and stack-quality comparisons:
+
+```
+fits> thr = 5 * bgnoise(b)                   # 5-sigma detection threshold
+fits> det = where(b - bg(b) > thr, b, 0)
+fits> bgnoise(stack) / bgnoise(light01)      # noise reduction factor
+```
+
+`clean` removes column-fixed vertical banding (a common defect on CMOS
+sensors with per-column readout amplifiers). For each row it divides by
+a horizontal Gaussian smooth (sigma = `kernel`/4); real structure varies
+row-to-row and cancels in the median across rows, leaving the per-column
+gain pattern, which is then divided out. The kernel must be larger than
+the banding period and smaller than your object scale — 64 px is a sane
+default for typical sensor banding; bump to 128 or higher if you have
+extended diffuse structure.
+
+```
+fits> debanded = clean(b)
+fits> debanded = clean(b, kernel=128)
+```
 
 ### Counting files
 
