@@ -25,7 +25,9 @@ Bare names refer to <name>.fits in the current directory.
     fits> view(b)                open b.fits in the image viewer
     fits> view(lights*)          browse a sequence (Prev/Next, A=auto-scale)
     fits> b                      print stats for b.fits
-    fits> ls                     list *.fits in cwd
+    fits> ls                     list *.fits and *.ser in cwd
+    fits> ls ..                  list FITS/SER in another directory
+    fits> ls *.fits              glob for matching files (any extension)
     fits> info b                 show FITS HDU info
     fits> stats b
     fits> quit
@@ -424,9 +426,44 @@ def stats_str(arr) -> str:
     )
 
 
-def cmd_ls():
-    for p in sorted(p for p in os.listdir(".") if p.endswith(EXT)):
-        print(p)
+def cmd_ls(args):
+    """List FITS/SER files. With no args: cwd. With args: each may be a
+    directory (lists FITS/SER inside), a glob (any extension), or a file."""
+    suffixes = (EXT, ".ser")
+
+    if not args:
+        for p in sorted(p for p in os.listdir(".") if p.endswith(suffixes)):
+            print(p)
+        return
+
+    multi = len(args) > 1
+    for i, raw in enumerate(args):
+        t = os.path.expanduser(raw)
+        if multi and i > 0:
+            print()
+        if os.path.isdir(t):
+            if multi:
+                print(f"{raw}:")
+            try:
+                entries = sorted(p for p in os.listdir(t) if p.endswith(suffixes))
+            except OSError as e:
+                print(f"ls: {raw}: {e}", file=sys.stderr)
+                continue
+            for e in entries:
+                print(e)
+            continue
+        matches = sorted(globmod.glob(t))
+        if not matches:
+            if any(c in t for c in "*?["):
+                print(f"ls: no match for '{raw}'", file=sys.stderr)
+            else:
+                print(f"ls: cannot access '{raw}': No such file or directory",
+                      file=sys.stderr)
+            continue
+        if multi:
+            print(f"{raw}:")
+        for m in matches:
+            print(m)
 
 
 def cmd_info(name):
@@ -445,8 +482,8 @@ def run_line(line: str) -> None:
     if head == "help":
         print(__doc__)
         return
-    if head == "ls" and len(parts) == 1:
-        cmd_ls()
+    if head == "ls":
+        cmd_ls(parts[1:])
         return
     if head == "info" and len(parts) == 2:
         cmd_info(parts[1])

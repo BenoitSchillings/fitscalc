@@ -246,11 +246,24 @@ at a different viewer if you have your own.
 ## Special commands
 
 ```
-ls                  list *.fits in the current directory
+ls                  list *.fits and *.ser in cwd
+ls <dir>            list *.fits and *.ser in <dir> (e.g. ls ..)
+ls <pattern>        glob for matching files (any extension)
+ls <a> <b> ...      multiple targets (each gets a header)
 info <name>         show FITS HDU info for <name>.fits
 stats <name>        print min/max/mean/std of <name>.fits
 help                show the docstring
 quit | exit | q     leave
+```
+
+`ls` examples:
+
+```
+fits> ls                          # all FITS/SER in cwd
+fits> ls ..                       # all FITS/SER in parent dir
+fits> ls *.ser                    # only SER files in cwd
+fits> ls /data/2024-12-15         # FITS/SER in another folder
+fits> ls darks/ flats/ *.fits     # mix dirs and globs
 ```
 
 (`view` is a function-call form, not a special command — see
